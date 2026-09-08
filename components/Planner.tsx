@@ -39,6 +39,8 @@ export default function Planner() {
   const [submitted, setSubmitted] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [savedId, setSavedId] = useState<string | null>(null);
 
   function toggle(list: string[], set: (v: string[]) => void, value: string) {
     set(list.includes(value) ? list.filter((x) => x !== value) : [...list, value]);
@@ -48,6 +50,7 @@ export default function Planner() {
     setLoading(true);
     setError(null);
     setTrip(null);
+    setSavedId(null);
 
     try {
       const res = await fetch("/api/generate", {
@@ -77,6 +80,26 @@ export default function Planner() {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleSave() {
+    if (!trip) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/trips", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trip, budget: submitted ?? budget }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not save");
+      setSavedId(data.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -327,7 +350,25 @@ export default function Planner() {
         </div>
       </div>
 
-      {trip && <Itinerary trip={trip} budget={submitted ?? budget} />}
+      {trip && (
+        <>
+          <div className="mt-10 flex items-center gap-3">
+            <button
+              onClick={handleSave}
+              disabled={saving || savedId !== null}
+              className="rounded-md border border-neutral-900 px-5 py-2.5 font-medium text-neutral-900 transition-colors hover:bg-neutral-900 hover:text-white disabled:opacity-40"
+            >
+              {savedId ? "Saved" : saving ? "Saving…" : "Save this trip"}
+            </button>
+            {savedId && (
+              <a href="/trips" className="text-sm text-neutral-600 underline underline-offset-4">
+                View saved trips
+              </a>
+            )}
+          </div>
+          <Itinerary trip={trip} budget={submitted ?? budget} />
+        </>
+      )}
     </div>
   );
 }
