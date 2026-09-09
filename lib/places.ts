@@ -22,7 +22,24 @@ const FIELD_MASK = [
   "places.priceLevel",
   "places.photos",
   "places.googleMapsUri",
+  "places.regularOpeningHours",
 ].join(",");
+
+type GooglePlace = {
+  id: string;
+  displayName?: { text?: string };
+  formattedAddress?: string;
+  location: { latitude: number; longitude: number };
+  rating?: number;
+  userRatingCount?: number;
+  priceLevel?: string;
+  photos?: { name: string }[];
+  googleMapsUri?: string;
+  regularOpeningHours?: {
+    weekdayDescriptions?: string[];
+    periods?: { open: { day: number }; close?: { day: number } }[];
+  };
+};
 
 /** Turn a place name into coordinates, so searches stay local. */
 export async function geocode(
@@ -72,18 +89,6 @@ async function pickUnused(
   return usable[0] ?? list.find((p) => !exclude?.has(p.placeId)) ?? list[0] ?? null;
 }
 
-type GooglePlace = {
-  id: string;
-  displayName?: { text?: string };
-  formattedAddress?: string;
-  location: { latitude: number; longitude: number };
-  rating?: number;
-  userRatingCount?: number;
-  priceLevel?: string;
-  photos?: { name: string }[];
-  googleMapsUri?: string;
-};
-
 async function fetchPlaces(
   query: string,
   center: { lat: number; lng: number } | null
@@ -118,9 +123,9 @@ async function fetchPlaces(
   }
 
   const data = await res.json();
-    const places: GooglePlace[] = data.places ?? [];
+  const places: GooglePlace[] = data.places ?? [];
 
-    return places.map(
+  return places.map(
     (p: GooglePlace): ResolvedPlace => ({
       placeId: p.id,
       name: p.displayName?.text ?? query,
@@ -132,6 +137,10 @@ async function fetchPlaces(
       priceLevel: p.priceLevel ? PRICE_LEVELS[p.priceLevel] ?? null : null,
       photoRef: p.photos?.[0]?.name ?? null,
       mapsUrl: p.googleMapsUri ?? null,
+      openDays: p.regularOpeningHours?.periods
+        ? [...new Set(p.regularOpeningHours.periods.map((x) => x.open.day))]
+        : null,
+      hoursText: p.regularOpeningHours?.weekdayDescriptions ?? null,
     })
   );
 }

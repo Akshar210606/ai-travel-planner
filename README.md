@@ -1,36 +1,113 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Travel Planner
 
-## Getting Started
+Give it a city, a budget, and some dates. It returns a day-by-day itinerary
+where every restaurant, museum, and viewpoint is a real place that exists
+today — with an address, a rating, a photo, and a pin on a map.
 
-First, run the development server:
+**Live:** https://ai-travel-planner-peach-phi.vercel.app
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## The problem this solves
+
+Ask a language model to plan a trip and it will confidently recommend a
+charming café that closed in 2019. The model is good at structure — pacing,
+neighbourhood logic, what belongs in a morning versus an evening — and
+unreliable at facts about specific businesses.
+
+So the model never names a restaurant. It produces a *search query*:
+
+```json
+{
+  "title": "Traditional Portuguese lunch",
+  "placeQuery": "seafood restaurant in Alfama Lisbon Portugal",
+  "category": "restaurant",
+  "estimatedCost": 35
+}
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Google Places then resolves that query into a real venue. The schema makes
+hallucination structurally impossible — there is no field for a business
+name, so the model has nowhere to invent one.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## How it works
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. **Plan** — OpenAI returns a trip skeleton constrained by a JSON schema
+   (structured outputs, so malformed responses can't happen)
+2. **Geocode** — each day's neighbourhood becomes a coordinate, so searches
+   stay local instead of scattering across the metro area
+3. **Resolve** — every `placeQuery` hits Places Text Search, filtered for a
+   minimum review count and deduplicated across the whole trip
+4. **Price** — costs are computed in TypeScript from Google's price levels,
+   never taken from the model's arithmetic
+5. **Check** — with real dates, each stop is compared against the venue's
+   opening days and flagged if it's closed
 
-## Learn More
+## Features
 
-To learn more about Next.js, take a look at the following resources:
+- Budget enforced in code, with a spend meter against your stated budget
+- Dates drive seasonal advice (daylight hours, weather, what to book ahead)
+  and closure warnings
+- Dietary requirements written into the search query itself, not just the
+  prompt — a vegetarian search returns vegetarian restaurants
+- Interactive map, colour-coded by day, numbered in visit order
+- Trip photos proxied server-side so the API key never reaches the browser
+- Saved trips behind passwordless auth, protected by Postgres row-level
+  security
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Stack
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Next.js 16 (App Router) · TypeScript · Tailwind v4 · Zod · OpenAI ·
+Google Places API (New) · Supabase · Vercel
 
-## Deploy on Vercel
+## Design decisions worth explaining
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+**Two Google API keys, not one.** The Maps JavaScript key must ship to the
+browser, so it's restricted by HTTP referrer — copying it gets you nothing.
+The Places and Geocoding key stays server-side and is restricted by API, so
+a leak has a bounded blast radius.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+**Zod as the single source of truth.** One schema generates the JSON schema
+sent to OpenAI, the TypeScript types across the app, and the runtime
+validation gate. Types alone vanish at compile time; when your data comes
+from a language model, you want a real check.
+
+**Authorisation in the database.** Trip queries contain no `where user_id`
+clause. Postgres RLS adds it before the query runs, so a bug in application
+code can't leak another user's trips.
+
+**Warn rather than auto-fix.** When Google says a venue is closed, the app
+flags it instead of silently swapping in an alternative. Hours data is
+often stale, and confidently wrong behaviour is worse than an honest flag.
+
+## Known limitations
+
+- **Fixed 3km search radius.** Works in dense old towns like Alfama;
+  spreads badly in low-density suburbs like Karen, Nairobi, where stops
+  end up kilometres apart.
+- **Cuisine terms aren't enforced.** A request for Portuguese food in Belém
+  once returned a French bistro — Google weighted location over the cuisine
+  word. Fixing this properly needs the Places `includedType` parameter.
+- **Activity queries resolve poorly.** "Street art walking route" matched a
+  place literally named "Street art" with one review. Routes and walks
+  aren't venues. Mitigated by a 20-review floor, not solved.
+- **Neighbourhood labels drift.** A stop tagged Baixa can sit in Cais do
+  Sodré. The location bias keeps things close, not correct.
+- **Price-level fallbacks are CAD-shaped.** Selecting EUR still uses a
+  hardcoded cost table calibrated in Canadian dollars.
+- **In-memory cache.** Dies on restart and isn't shared across serverless
+  instances in production.
+- **Dietary matching is search, not certification.** The app finds places
+  whose listings match the term. It cannot verify halal or kosher status,
+  and says so in the UI.
+- **Magic links must be opened on the device that requested them.**
+  A known trade-off of the flow.
+
+## Running locally
+
+```bash
+npm install
+cp .env.example .env.local   # then fill in your keys
+npm run dev
+```
+
+Requires an OpenAI key, two Google Maps keys (see above), and a Supabase
+project with the `trips` table and RLS policies from `supabase/schema.sql`.

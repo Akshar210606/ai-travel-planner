@@ -19,6 +19,7 @@ export const GROUPS = ["solo", "couple", "family", "friends"] as const;
 export const TripRequestSchema = z.object({
   destination: z.string().min(2).max(100),
   days: z.number().int().min(1).max(10),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().default(null),
   budget: z.number().positive(),
   currency: z.enum(["CAD", "USD", "EUR", "GBP"]),
   pace: z.enum(["relaxed", "balanced", "packed"]),
@@ -72,12 +73,15 @@ export const ResolvedPlaceSchema = z.object({
   priceLevel: z.number().nullable(),
   photoRef: z.string().nullable(),
   mapsUrl: z.string().nullable(),
+  openDays: z.array(z.number()).nullable(),
+  hoursText: z.array(z.string()).nullable(),
 });
 
 /* ---------- 4. The finished thing ---------- */
 
 export const StopSchema = PlannedStopSchema.extend({
   place: ResolvedPlaceSchema.nullable(),
+  closedOnDay: z.boolean().default(false),
 });
 
 export const DaySchema = PlannedDaySchema.omit({ stops: true }).extend({
@@ -87,6 +91,7 @@ export const DaySchema = PlannedDaySchema.omit({ stops: true }).extend({
 export const TripSchema = z.object({
   destination: z.string(),
   days: z.array(DaySchema),
+  startDate: z.string().nullable().default(null),
   summary: z.string(),
   totalEstimatedCost: z.number(),
   currency: z.string(),

@@ -26,6 +26,7 @@ const GROUP_LABEL = {
 
 export default function Planner() {
   const [destination, setDestination] = useState("");
+  const [startDate, setStartDate] = useState("");
   const [days, setDays] = useState(3);
   const [budget, setBudget] = useState(600);
   const [currency, setCurrency] = useState<TripRequest["currency"]>("CAD");
@@ -59,6 +60,7 @@ export default function Planner() {
         body: JSON.stringify({
           destination, days, budget, currency, pace, interests,
           group, dietary, cuisines,
+          startDate: startDate || null,
         }),
       });
 
@@ -146,7 +148,21 @@ export default function Planner() {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-6">
+          <div className="col-span-2">
+            <label htmlFor="startDate" className="block text-sm font-medium text-neutral-800">
+              Starting <span className="text-neutral-500">(optional)</span>
+            </label>
+            <input
+              id="startDate"
+              type="date"
+              value={startDate}
+              min={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => setStartDate(e.target.value)}
+              className={field + " mt-2"}
+            />
+          </div>
+
           <div>
             <label htmlFor="days" className="block text-sm font-medium text-neutral-800">
               Days

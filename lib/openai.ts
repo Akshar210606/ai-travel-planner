@@ -22,8 +22,32 @@ const GROUP_NOTE = {
     "and some nightlife.",
 } as const;
 
+function dateContext(startDate: string | null, days: number): string {
+  if (!startDate) return "";
+
+  const start = new Date(startDate + "T12:00:00");
+  const end = new Date(start);
+  end.setDate(end.getDate() + days - 1);
+
+  const fmt = (d: Date) =>
+    d.toLocaleDateString("en-CA", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+
+  return `
+
+Dates: ${fmt(start)} to ${fmt(end)}.
+Take the season into account — weather, daylight hours, what's worth doing
+at that time of year, and anything seasonal worth catching or avoiding.
+Many museums close one day a week, commonly Monday. Do not schedule a
+museum or gallery on a day it is likely to be shut.`;
+}
+
 function buildPrompt(req: TripRequest): string {
-  const perDay = Math.floor(req.budget / req.days);
+    const perDay = Math.min(Math.floor(req.budget / req.days), 250);
   const stopsPerDay = { relaxed: 3, balanced: 4, packed: 6 }[req.pace];
 
   const dietary = req.dietary.length
@@ -49,7 +73,7 @@ day, but keep some local food in the trip too.`
 Budget: ${req.budget} ${req.currency} total, about ${perDay} ${req.currency} per day.
 Interests: ${req.interests.join(", ")}.
 Pace: ${req.pace} — aim for ${stopsPerDay} stops per day.
-${GROUP_NOTE[req.group]}${dietary}${cuisines}
+${GROUP_NOTE[req.group]}${dateContext(req.startDate, req.days)}${dietary}${cuisines}
 
 Rules:
 - Each day must include lunch and dinner. Breakfast optional.
@@ -62,8 +86,10 @@ Rules:
 - Match the neighborhood in each placeQuery to that day's actual
   neighborhood.
 - estimatedCost is per person in ${req.currency}. Use 0 for free things.
-- Spend 70-90% of the ${perDay} ${req.currency} daily budget. Prefer
-  well-regarded local places over the most expensive options.
+- Spend up to ${perDay} ${req.currency} per day on activities and food.
+  If the total budget exceeds what a day can reasonably absorb, spend
+  less rather than inflating prices — the remainder covers transport,
+  accommodation and extras.
 - placeQuery must be plain and factual. Do NOT use words like "upscale",
   "fine dining", "high-quality", "best" or "authentic". Write what the
   place IS, not how good it is.`;

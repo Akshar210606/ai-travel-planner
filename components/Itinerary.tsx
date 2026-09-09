@@ -16,6 +16,17 @@ const TIME_LABEL = {
   evening: "Evening",
 } as const;
 
+function dayDate(startDate: string | null, dayNumber: number) {
+  if (!startDate) return null;
+  const d = new Date(startDate + "T12:00:00");
+  d.setDate(d.getDate() + dayNumber - 1);
+  return d.toLocaleDateString("en-CA", {
+    weekday: "long",
+    day: "numeric",
+    month: "short",
+  });
+}
+
 export default function Itinerary({ trip, budget }: { trip: Trip; budget: number }) {
   const spent = trip.totalEstimatedCost;
   const pct = Math.min(100, Math.round((spent / budget) * 100));
@@ -70,6 +81,11 @@ export default function Itinerary({ trip, budget }: { trip: Trip; budget: number
                 Day {day.dayNumber}
               </h3>
               <span className="text-neutral-500">{day.neighborhood}</span>
+              {dayDate(trip.startDate, day.dayNumber) && (
+                <span className="text-sm text-neutral-400">
+                  {dayDate(trip.startDate, day.dayNumber)}
+                </span>
+              )}
             </div>
             <p className="ml-[1.125rem] mt-1 text-neutral-600">{day.theme}</p>
 
@@ -110,6 +126,7 @@ export default function Itinerary({ trip, budget }: { trip: Trip; budget: number
                           loading="lazy"
                         />
                       )}
+
                       <a
                         href={stop.place.mapsUrl ?? "#"}
                         target="_blank"
@@ -124,6 +141,13 @@ export default function Itinerary({ trip, budget }: { trip: Trip; budget: number
                       {stop.place.rating && (
                         <p className="mt-1 text-sm text-neutral-500">
                           {stop.place.rating} stars from {stop.place.ratingCount?.toLocaleString()} reviews
+                        </p>
+                      )}
+
+                      {stop.closedOnDay && (
+                        <p className="mt-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                          Google lists this as closed on this day. Check before you
+                          go, or move this stop.
                         </p>
                       )}
                     </div>
