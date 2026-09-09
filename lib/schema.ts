@@ -73,8 +73,8 @@ export const ResolvedPlaceSchema = z.object({
   priceLevel: z.number().nullable(),
   photoRef: z.string().nullable(),
   mapsUrl: z.string().nullable(),
-  openDays: z.array(z.number()).nullable(),
-  hoursText: z.array(z.string()).nullable(),
+  openDays: z.array(z.number()).nullable().default(null),
+  hoursText: z.array(z.string()).nullable().default(null),
 });
 
 /* ---------- 4. The finished thing ---------- */

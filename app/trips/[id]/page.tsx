@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import Itinerary from "@/components/Itinerary";
 import { TripSchema } from "@/lib/schema";
+import DeleteTrip from "@/components/DeleteTrip";
 
 export const dynamic = "force-dynamic";
 
@@ -20,18 +21,18 @@ export default async function SavedTrip({
     .eq("id", id)
     .single();
 
-  if (!data) notFound();
+    if (!data) notFound();
 
   const parsed = TripSchema.safeParse(data.data);
   if (!parsed.success) notFound();
-
+  
   const saved = new Intl.DateTimeFormat("en-CA", {
     day: "numeric",
     month: "long",
     year: "numeric",
   }).format(new Date(data.created_at));
 
-  return (
+    return (
     <div className="mx-auto max-w-3xl px-6 py-10">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 pb-6">
         <Link
@@ -40,7 +41,10 @@ export default async function SavedTrip({
         >
           All trips
         </Link>
-        <span className="text-sm text-neutral-500">Saved {saved}</span>
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-neutral-500">Saved {saved}</span>
+          <DeleteTrip id={id} />
+        </div>
       </div>
 
       <Itinerary trip={parsed.data} budget={Number(data.budget)} />
