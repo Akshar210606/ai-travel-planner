@@ -27,10 +27,19 @@ function dayDate(startDate: string | null, dayNumber: number) {
   });
 }
 
-export default function Itinerary({ trip, budget }: { trip: Trip; budget: number }) {
+export default function Itinerary({
+  trip,
+  budget,
+  totalDays,
+}: {
+  trip: Trip;
+  budget: number;
+  totalDays?: number;
+}) {
   const spent = trip.totalEstimatedCost;
   const pct = Math.min(100, Math.round((spent / budget) * 100));
   const over = spent > budget;
+  const pending = Math.max(0, (totalDays ?? trip.days.length) - trip.days.length);
 
   return (
     <div className="mt-16">
@@ -42,27 +51,31 @@ export default function Itinerary({ trip, budget }: { trip: Trip; budget: number
           {trip.summary}
         </p>
 
-        <div className="mt-6 max-w-sm">
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-semibold tabular-nums text-neutral-900">
-              {money(spent, trip.currency)}
-            </span>
-            <span className="text-sm text-neutral-500">
-              of {money(budget, trip.currency)}
-            </span>
+        {spent > 0 ? (
+          <div className="mt-6 max-w-sm">
+            <div className="flex items-baseline justify-between">
+              <span className="text-2xl font-semibold tabular-nums text-neutral-900">
+                {money(spent, trip.currency)}
+              </span>
+              <span className="text-sm text-neutral-500">
+                of {money(budget, trip.currency)}
+              </span>
+            </div>
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-neutral-200">
+              <div
+                className={"h-full rounded-full " + (over ? "bg-red-700" : "bg-neutral-900")}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <p className="mt-2 text-sm text-neutral-500">
+              {over
+                ? `${money(spent - budget, trip.currency)} over budget`
+                : `${money(budget - spent, trip.currency)} left for transport and extras`}
+            </p>
           </div>
-          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-neutral-200">
-            <div
-              className={"h-full rounded-full " + (over ? "bg-red-700" : "bg-neutral-900")}
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-          <p className="mt-2 text-sm text-neutral-500">
-            {over
-              ? `${money(spent - budget, trip.currency)} over budget`
-              : `${money(budget - spent, trip.currency)} left for transport and extras`}
-          </p>
-        </div>
+        ) : (
+          <div className="mt-6 h-14 max-w-sm animate-pulse rounded bg-neutral-100" />
+        )}
       </div>
 
       <TripMap trip={trip} />
@@ -159,6 +172,44 @@ export default function Itinerary({ trip, budget }: { trip: Trip; budget: number
                 </li>
               ))}
             </ol>
+          </section>
+        );
+      })}
+
+      {pending > 0 && (
+        <p className="mt-14 flex items-center gap-2 text-sm text-neutral-500">
+          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-neutral-400" />
+          Building day {trip.days.length + 1} of {totalDays}
+        </p>
+      )}
+
+      {Array.from({ length: pending }).map((_, i) => {
+        const dayNumber = trip.days.length + i + 1;
+        return (
+          <section
+            key={`pending-${dayNumber}`}
+            className={i === 0 ? "mt-6" : "mt-14"}
+          >
+            <div className="flex items-center gap-3">
+              <span
+                className="h-6 w-1.5 rounded-full opacity-30"
+                style={{ background: dayColor(dayNumber) }}
+                aria-hidden
+              />
+              <h3 className="text-xl font-semibold text-neutral-300">
+                Day {dayNumber}
+              </h3>
+            </div>
+
+            <div className="ml-[0.3rem] mt-6 space-y-6 border-l border-neutral-200 pl-8">
+              {[0, 1, 2].map((n) => (
+                <div key={n} className="animate-pulse space-y-2">
+                  <div className="h-4 w-1/2 rounded bg-neutral-100" />
+                  <div className="h-3 w-1/3 rounded bg-neutral-100" />
+                  <div className="h-24 w-full rounded bg-neutral-100" />
+                </div>
+              ))}
+            </div>
           </section>
         );
       })}

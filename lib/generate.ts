@@ -1,6 +1,12 @@
 import { generateTripPlan } from "@/lib/openai";
 import { geocode, findPlace } from "@/lib/places";
-import { TripSchema, type TripRequest, type Trip, type Stop } from "@/lib/schema";
+import {
+  TripSchema,
+  type TripRequest,
+  type Trip,
+  type Stop,
+  type Day,
+} from "@/lib/schema";
 
 /** Rough per-person meal cost by Google price level. */
 const PRICE_LEVEL_COST: Record<number, number> = {
@@ -9,6 +15,66 @@ const PRICE_LEVEL_COST: Record<number, number> = {
 
 const DINING = new Set(["restaurant", "cafe", "bar"]);
 
+export type TripEvent =
+  | {
+      type: "meta";
+      destination: string;
+      summary: string;
+      currency: string;
+      startDate: string | null;
+      totalDays: number;
+    }
+  | { type: "day"; day: Day }
+  | { type: "done"; totalEstimatedCost: number }
+  | { type: "error"; message: string };
+
+/** Emits the trip piece by piece, so the UI can render as it arrives. */
+export async function* streamTrip(req: TripRequest): AsyncGenerator<TripEvent> {
+  const plan = await generateTripPlan(req);
+  const cityCenter = await geocode(req.destination);
+
+  yield {
+    type: "meta",
+    destination: req.destination,
+    summary: plan.summary,
+    currency: req.currency,
+    startDate: req.startDate,
+    totalDays: plan.days.length,
+  };
+
+  const used = new Set<string>();
+  let total = 0;
+
+  for (const day of plan.days) {
+    const dayCenter =
+      (await geocode(`${day.neighborhood}, ${req.destination}`)) ?? cityCenter;
+
+    const weekday = weekdayFor(req.startDate, day.dayNumber);
+
+    const stops: Stop[] = [];
+    for (const stop of day.stops) {
+      const place = await findPlace(stop.placeQuery, dayCenter, used);
+      if (place) used.add(place.placeId);
+
+      const closedOnDay =
+        weekday !== null &&
+        place?.openDays != null &&
+        place.openDays.length > 0 &&
+        !place.openDays.includes(weekday);
+
+      const withPlace = { ...stop, place, closedOnDay };
+      const finished = { ...withPlace, estimatedCost: realCost(withPlace) };
+      total += finished.estimatedCost;
+      stops.push(finished);
+    }
+
+    yield { type: "day", day: { ...day, stops } };
+  }
+
+  yield { type: "done", totalEstimatedCost: total };
+}
+
+/** Builds the whole trip at once. Used where a complete object is needed. */
 export async function generateTrip(req: TripRequest): Promise<Trip> {
   const plan = await generateTripPlan(req);
   const cityCenter = await geocode(req.destination);

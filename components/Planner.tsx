@@ -27,8 +27,8 @@ const GROUP_LABEL = {
 export default function Planner() {
   const [destination, setDestination] = useState("");
   const [startDate, setStartDate] = useState("");
-  const [days, setDays] = useState(3);
-  const [budget, setBudget] = useState(600);
+  const [days, setDays] = useState("3");
+  const [budget, setBudget] = useState("600");
   const [currency, setCurrency] = useState<TripRequest["currency"]>("CAD");
   const [pace, setPace] = useState<TripRequest["pace"]>("balanced");
   const [interests, setInterests] = useState<string[]>(["food"]);
@@ -38,10 +38,14 @@ export default function Planner() {
 
   const [trip, setTrip] = useState<Trip | null>(null);
   const [submitted, setSubmitted] = useState<number | null>(null);
+  const [totalDays, setTotalDays] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(null);
+
+  const daysNum = Number(days);
+  const budgetNum = Number(budget);
 
   function toggle(list: string[], set: (v: string[]) => void, value: string) {
     set(list.includes(value) ? list.filter((x) => x !== value) : [...list, value]);
@@ -52,13 +56,17 @@ export default function Planner() {
     setError(null);
     setTrip(null);
     setSavedId(null);
+    setTotalDays(0);
 
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          destination, days, budget, currency, pace, interests,
+          destination,
+          days: daysNum,
+          budget: budgetNum,
+          currency, pace, interests,
           group, dietary, cuisines,
           startDate: startDate || null,
         }),
@@ -76,8 +84,54 @@ export default function Planner() {
         throw new Error(message);
       }
 
-      setTrip(await res.json());
-      setSubmitted(budget);
+      if (!res.body) throw new Error("No response body");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let partial: Trip = {
+        destination: "",
+        days: [],
+        startDate: null,
+        summary: "",
+        totalEstimatedCost: 0,
+        currency,
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const event = JSON.parse(line);
+
+          if (event.type === "meta") {
+            partial = {
+              ...partial,
+              destination: event.destination,
+              summary: event.summary,
+              currency: event.currency,
+              startDate: event.startDate,
+            };
+            setTotalDays(event.totalDays);
+          } else if (event.type === "day") {
+            partial = { ...partial, days: [...partial.days, event.day] };
+          } else if (event.type === "done") {
+            partial = { ...partial, totalEstimatedCost: event.totalEstimatedCost };
+          } else if (event.type === "error") {
+            throw new Error(event.message);
+          }
+
+          setTrip({ ...partial });
+        }
+      }
+
+      setSubmitted(budgetNum);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -93,7 +147,7 @@ export default function Planner() {
       const res = await fetch("/api/trips", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ trip, budget: submitted ?? budget }),
+        body: JSON.stringify({ trip, budget: submitted ?? budgetNum }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Could not save");
@@ -111,6 +165,9 @@ export default function Planner() {
 
   const canSubmit =
     destination.trim().length >= 2 &&
+    daysNum >= 1 &&
+    daysNum <= 10 &&
+    budgetNum >= 50 &&
     interests.length > 0 &&
     !tooManyInterests &&
     !tooManyDietary &&
@@ -149,9 +206,9 @@ export default function Planner() {
         </div>
 
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-6">
-          <div className="col-span-2">
+                    <div className="col-span-2">
             <label htmlFor="startDate" className="block text-sm font-medium text-neutral-800">
-              Starting <span className="text-neutral-500">(optional)</span>
+              First day <span className="text-neutral-500">(optional)</span>
             </label>
             <input
               id="startDate"
@@ -168,8 +225,19 @@ export default function Planner() {
               Days
             </label>
             <input
-              id="days" type="number" min={1} max={10} value={days}
-              onChange={(e) => setDays(Number(e.target.value))}
+              id="days"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={10}
+              value={days}
+              onChange={(e) => setDays(e.target.value)}
+              onBlur={() => {
+                const n = Number(days);
+                if (!days || n < 1) setDays("1");
+                else if (n > 10) setDays("10");
+                else setDays(String(n));
+              }}
               className={field + " mt-2"}
             />
           </div>
@@ -179,8 +247,18 @@ export default function Planner() {
               Total budget
             </label>
             <input
-              id="budget" type="number" min={50} step={50} value={budget}
-              onChange={(e) => setBudget(Number(e.target.value))}
+              id="budget"
+              type="number"
+              inputMode="numeric"
+              min={50}
+              step={50}
+              value={budget}
+              onChange={(e) => setBudget(e.target.value)}
+              onBlur={() => {
+                const n = Number(budget);
+                if (!budget || n < 50) setBudget("50");
+                else setBudget(String(n));
+              }}
               className={field + " mt-2"}
             />
           </div>
@@ -357,33 +435,48 @@ export default function Planner() {
           >
             {loading ? "Building your trip…" : "Plan my trip"}
           </button>
-          {loading && (
+                    {loading && !trip?.days.length && (
             <p className="mt-2 text-center text-sm text-neutral-500">
-              Finding real places and checking prices. About 30 seconds.
+              Planning your route…
             </p>
           )}
           {error && <p className="mt-2 text-sm text-red-700">{error}</p>}
         </div>
       </div>
 
-      {trip && (
+                  {trip && trip.destination && (
         <>
-          <div className="mt-10 flex items-center gap-3">
-            <button
-              onClick={handleSave}
-              disabled={saving || savedId !== null}
-              className="rounded-md border border-neutral-900 px-5 py-2.5 font-medium text-neutral-900 transition-colors hover:bg-neutral-900 hover:text-white disabled:opacity-40"
-            >
-              {savedId ? "Saved" : saving ? "Saving…" : "Save this trip"}
-            </button>
-            {savedId && (
-              <a href="/trips" className="text-sm text-neutral-600 underline underline-offset-4">
-                View saved trips
-              </a>
-            )}
-          </div>
-          <Itinerary trip={trip} budget={submitted ?? budget} />
-        </>
+          <Itinerary
+            trip={trip}
+            budget={submitted ?? budgetNum}
+            totalDays={totalDays}
+          />
+
+          {!loading && (
+            <div className="mt-16 border-t border-neutral-200 pt-8">
+              <p className="text-neutral-600">
+                Happy with this one? Save it and it&apos;ll be here when you come back.
+              </p>
+              <div className="mt-4 flex flex-wrap items-center gap-4">
+                <button
+                  onClick={handleSave}
+                  disabled={saving || savedId !== null}
+                  className="rounded-md bg-neutral-900 px-6 py-3 font-medium text-white transition-colors hover:bg-neutral-800 disabled:opacity-40"
+                >
+                  {savedId ? "Saved" : saving ? "Saving…" : "Save this trip"}
+                </button>
+                                {savedId && (
+                  <a
+                    href="/trips"
+                    className="text-sm text-neutral-600 underline underline-offset-4"
+                  >
+                    View all saved trips
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+               </>
       )}
     </div>
   );

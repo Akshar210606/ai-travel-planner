@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { dayColor } from "@/lib/colors";
-import DeleteTrip from "@/components/DeleteTrip";
 
 export const dynamic = "force-dynamic";
 
