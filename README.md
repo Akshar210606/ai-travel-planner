@@ -40,18 +40,22 @@ name, so the model has nowhere to invent one.
    never taken from the model's arithmetic
 5. **Check** — with real dates, each stop is compared against the venue's
    opening days and flagged if it's closed
+6. **Stream** — days are sent to the browser as they finish, so you read
+   day one while day four is still building
 
 ## Features
 
 - Budget enforced in code, with a spend meter against your stated budget
-- Dates drive seasonal advice (daylight hours, weather, what to book ahead)
-  and closure warnings
+- Dates drive seasonal advice (daylight hours, weather, what to book ahead),
+  weekday labels, and closure warnings
 - Dietary requirements written into the search query itself, not just the
   prompt — a vegetarian search returns vegetarian restaurants
+- Cuisine preferences and group type (solo, couple, family, friends) shape
+  pacing and venue choice
 - Interactive map, colour-coded by day, numbered in visit order
 - Trip photos proxied server-side so the API key never reaches the browser
-- Saved trips behind passwordless auth, protected by Postgres row-level
-  security
+- Save, browse and delete trips behind passwordless auth, protected by
+  Postgres row-level security
 
 ## Stack
 
@@ -74,15 +78,22 @@ from a language model, you want a real check.
 clause. Postgres RLS adds it before the query runs, so a bug in application
 code can't leak another user's trips.
 
+**Errors inside the stream, not as status codes.** Once the response starts
+streaming the 200 is committed, so a failure halfway through arrives as an
+event the client handles rather than a status it can no longer change.
+
 **Warn rather than auto-fix.** When Google says a venue is closed, the app
 flags it instead of silently swapping in an alternative. Hours data is
 often stale, and confidently wrong behaviour is worse than an honest flag.
 
 ## Known limitations
 
+- **Generation takes 30–45 seconds.** The OpenAI call plans the whole trip
+  in one request, so streaming reveals days progressively but can't shorten
+  the initial wait. Longer trips approach Vercel's 60-second function limit.
 - **Fixed 3km search radius.** Works in dense old towns like Alfama;
-  spreads badly in low-density suburbs like Karen, Nairobi, where stops
-  end up kilometres apart.
+  spreads badly in low-density suburbs like Karen, Nairobi, where stops end
+  up kilometres apart.
 - **Cuisine terms aren't enforced.** A request for Portuguese food in Belém
   once returned a French bistro — Google weighted location over the cuisine
   word. Fixing this properly needs the Places `includedType` parameter.
@@ -100,6 +111,8 @@ often stale, and confidently wrong behaviour is worse than an honest flag.
   and says so in the UI.
 - **Magic links must be opened on the device that requested them.**
   A known trade-off of the flow.
+- **Schema changes break old saved trips** unless new fields carry
+  defaults. There's no migration layer.
 
 ## Running locally
 
@@ -110,4 +123,4 @@ npm run dev
 ```
 
 Requires an OpenAI key, two Google Maps keys (see above), and a Supabase
-project with the `trips` table and RLS policies from `supabase/schema.sql`.
+project built from `supabase/schema.sql`.
