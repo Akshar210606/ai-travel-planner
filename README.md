@@ -4,7 +4,7 @@ Give it a city, a budget, and some dates. It returns a day-by-day itinerary
 where every restaurant, museum, and viewpoint is a real place that exists
 today — with an address, a rating, a photo, and a pin on a map.
 
-**Live:** https://ai-travel-planner-peach-phi.vercel.app
+**Live:** https://ai-travel-planner-akshar12.vercel.app
 
 ## The problem this solves
 
@@ -90,7 +90,8 @@ often stale, and confidently wrong behaviour is worse than an honest flag.
 
 - **Generation takes 30–45 seconds.** The OpenAI call plans the whole trip
   in one request, so streaming reveals days progressively but can't shorten
-  the initial wait. Longer trips approach Vercel's 60-second function limit.
+  the initial wait. Trips are capped at 6 days to stay inside Vercel's
+  60-second function limit.
 - **Fixed 3km search radius.** Works in dense old towns like Alfama;
   spreads badly in low-density suburbs like Karen, Nairobi, where stops end
   up kilometres apart.
