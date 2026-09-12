@@ -18,7 +18,7 @@ export const GROUPS = ["solo", "couple", "family", "friends"] as const;
 
 export const TripRequestSchema = z.object({
   destination: z.string().min(2).max(100),
-  days: z.number().int().min(1).max(10),
+  days: z.number().int().min(1).max(6),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().default(null),
   budget: z.number().positive(),
   currency: z.enum(["CAD", "USD", "EUR", "GBP"]),

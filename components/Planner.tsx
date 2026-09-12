@@ -235,7 +235,7 @@ export default function Planner() {
               onBlur={() => {
                 const n = Number(days);
                 if (!days || n < 1) setDays("1");
-                else if (n > 10) setDays("10");
+                else if (n > 6) setDays("6");
                 else setDays(String(n));
               }}
               className={field + " mt-2"}
